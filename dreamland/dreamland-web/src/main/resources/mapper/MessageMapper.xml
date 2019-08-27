@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dream.dao.MessageDao">
+    <resultMap id="messageMapper" type="Message">
+        <id column="id" property="id"></id>
+        <result column="type" property="type"></result>
+        <result column="uid" property="uid"></result>
+        <result column="rid" property="rid"></result>
+        <result column="see" property="see"></result>
+        <result column="date" property="date"></result>
+        <result column="cid" property="cid"></result>
+<!--        一个消息对应一个接收者-->
+        <association property="user" javaType="User">
+            <id column="uuid" property="id"></id>
+            <result column="nick_name" property="nickName"></result>
+        </association>
+<!--        一个消息对应一个文章-->
+        <association property="userContent" javaType="UserContent">
+            <id column="ccid" property="id"></id>
+            <result column="title" property="title"></result>
+        </association>
+    </resultMap>
+       <select id="findById" resultMap="messageMapper">
+           select m.*,u.id as uuid,u.nick_name,uc.id as ccid,uc.title from message as m,user as u,user_content as uc where m.rid=#{rid}
+           and m.cid=uc.id and m.uid=u.id
+           <if test='see!=null and see!=""'>
+                and m.see=${see}
+           </if>
+       </select>
+    <update id="updateAll">
+        update message set see='1' where rid = #{rid}
+    </update>
+
+</mapper>

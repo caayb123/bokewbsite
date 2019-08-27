@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dream.dao.CommentDao">
+       <resultMap id="commentMap" type="Comment">
+              <id property="id" column="id" />
+              <result property="children" column="children" />
+              <result property="conId" column="con_id" />
+              <result property="comId" column="com_id" />
+              <result property="byId" column="by_id" />
+              <result property="upvote" column="upvote" />
+              <result property="commTime" column="comm_time" />
+              <result property="comContent" column="com_content" />
+<!--              一个评论对应一个评论者，一对一关系-->
+              <association property="user" javaType="User">
+                     <id column="uid" property="id" />
+                     <result column="email" property="email" />
+                     <result column="password" property="password" />
+                     <result column="nick_name" property="nickName" />
+                     <result column="phone" property="phone" />
+                     <result column="state" property="state" />
+                     <result column="img_url" property="imgUrl" />
+                     <result column="enable" property="enable" />
+              </association>
+       </resultMap>
+       <select id="selectAllByCommentId" resultMap="commentMap">
+              select c.* from comment as c,user as u where c.con_id=#{cid} and c.com_id=u.id order by c.id desc
+       </select>
+       <select id="findAllFirstComment" resultMap="commentMap">
+           select c.*,u.id as uid,u.email,u.password,u.nick_name,u.phone,u.state,u.img_url,u.enable from comment as c,user as u where con_id=#{cid} and c.com_id=u.id and by_id is null order by c.id desc
+       </select>
+       <insert id="insertComment" useGeneratedKeys="true" keyProperty="id" parameterType="Comment">
+              insert into comment values(#{id}, #{conId},#{comId}, #{byId},#{comContent},#{commTime},#{children},#{upvote})
+       </insert>
+       <select id="findAllChildrenComment" resultMap="commentMap">
+              select c.*,u.id as uid,u.email,u.password,u.nick_name,u.phone,u.state,u.img_url,u.enable
+              from comment c,user u WHERE con_id = #{cid}
+              AND c.id in (${children})
+              and c.com_id = u.id  order by c.id desc
+       </select>
+       
+</mapper>

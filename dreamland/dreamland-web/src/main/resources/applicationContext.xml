@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:amq="http://activemq.apache.org/schema/core"
+       xmlns:jms="http://www.springframework.org/schema/jms"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+          http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/jms
+        http://www.springframework.org/schema/jms/spring-jms.xsd
+        http://activemq.apache.org/schema/core
+        http://activemq.apache.org/schema/core/activemq-core.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+<!--    开启spring的注解扫描-->
+    <context:component-scan base-package="com.dream">
+<!--        controller的注解不由Spring管理由SpringMVC管理-->
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+    </context:component-scan>
+<!--   整合mybatis-->
+<!--    配置连接池-->
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <!--        配置连接数据库的信息-->
+        <property name="driverClass" value="com.mysql.jdbc.Driver"></property>
+        <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/dream"></property>
+        <property name="user" value="root"></property>
+        <property name="password" value="123456"></property>
+
+        <property name="initialPoolSize" value="10"></property>
+        <property name="maxIdleTime" value="30"></property>
+        <property name="maxPoolSize" value="100"></property>
+        <property name="minPoolSize" value="10"></property>
+        <property name="maxStatements" value="200"></property>
+    </bean>
+<!--    配置SqlSessionFactroy工厂-->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+<!--        注入连接池-->
+        <property name="dataSource" ref="dataSource"></property>
+<!--        配置domain别名-->
+        <property name="typeAliasesPackage" value="com.dream.domain"></property>
+<!--        配置sql映射文件路径-->
+        <property name="mapperLocations" value="classpath:mapper/*.xml">
+        </property>
+
+
+        <property name="plugins">
+            <array>
+
+                <!--        配置mybatis分页插件-->
+                <bean class="com.github.pagehelper.PageInterceptor">
+                    <property name="properties">
+                        <props>
+                            <prop key="helperDialect">mysql</prop>
+                            <prop key="reasonable">true</prop>
+                        </props>
+                    </property>
+                </bean>
+
+            </array>
+        </property>
+     </bean>
+<!--    配置需要代理的Dao接口所在的包也是通用Mapper配置点-->
+    <bean id="mapperScannerConfigurer" class="tk.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.dream.dao"></property>
+    </bean>
+
+<!--    配置redis-->
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <property name="maxIdle" value="300" />
+        <property name="maxWaitMillis" value="3000" />
+        <property name="testOnBorrow" value="true" />
+    </bean>
+    <!-- 从外部配置文件获取redis相关信息 -->
+    <bean id="redisConnectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <property name="hostName" value="localhost" />
+        <property name="port" value="6379" />
+        <property name="database" value="2" />
+        <property name="poolConfig" ref="poolConfig"/>
+    </bean>
+    <!-- redis模板配置 -->
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate">
+        <property name="connectionFactory" ref="redisConnectionFactory"></property>
+        <!-- 对于中文的存储 需要进行序列化操作存储  -->
+        <property name="keySerializer">
+            <bean class="org.springframework.data.redis.serializer.StringRedisSerializer" />
+        </property>
+        <property name="valueSerializer">
+            <bean class="org.springframework.data.redis.serializer.StringRedisSerializer">
+            </bean>
+        </property>
+    </bean>
+    <!-- ActiveMQ 连接工厂 -->
+    <!-- 真正可以产生Connection的ConnectionFactory，由对应的 JMS服务厂商提供-->
+    <!-- 如果连接网络：tcp://ip:61616；未连接网络：tcp://localhost:61616 以及用户名，密码-->
+    <amq:connectionFactory id="amqConnectionFactory" brokerURL="tcp://localhost:61616" userName="admin" password="admin"  />
+
+    <!-- Spring Caching连接工厂 -->
+    <!-- Spring用于管理真正的ConnectionFactory的ConnectionFactory -->
+    <bean id="connectionFactory" class="org.springframework.jms.connection.CachingConnectionFactory">
+        <!-- 目标ConnectionFactory对应真实的可以产生JMS Connection的ConnectionFactory -->
+        <property name="targetConnectionFactory" ref="amqConnectionFactory"></property>
+        <!-- 同上，同理 -->
+        <!-- <constructor-arg ref="amqConnectionFactory" /> -->
+        <!-- Session缓存数量 -->
+        <property name="sessionCacheSize" value="100" />
+    </bean>
+
+    <!-- Spring JmsTemplate 的消息生产者 start-->
+    <!-- 定义JmsTemplate的Queue类型 -->
+    <bean id="jmsQueueTemplate" class="org.springframework.jms.core.JmsTemplate">
+        <!-- 这个connectionFactory对应的是我们定义的Spring提供的那个ConnectionFactory对象 -->
+        <constructor-arg ref="connectionFactory" />
+        <!-- 非pub/sub模型（发布/订阅），即队列模式 -->
+        <property name="pubSubDomain" value="false" />
+    </bean>
+
+    <!-- Spring JmsTemplate 的消息生产者 end -->
+
+    <!-- 消息消费者 start-->
+
+    <!-- 定义Queue监听器 -->
+    <jms:listener-container destination-type="queue" container-type="default" connection-factory="connectionFactory" acknowledge="auto">
+        <!-- 默认注册bean名称，应该是类名首字母小写  -->
+        <jms:listener destination="login_msg" ref="smsAuthenCode"/>
+        <jms:listener destination="recellphone_msg" ref="smsAuthenCode"/>
+        <jms:listener destination="push_msg" ref="pushMsgCode"/>
+    </jms:listener-container>
+    <!-- 消息消费者 end -->
+
+<!--   配置solr搜索引擎-->
+    <bean id="httpSolrClient" class="org.apache.solr.client.solrj.impl.HttpSolrClient">
+        <constructor-arg name="builder" value="http://localhost:8983/solr/mycore"/>
+    </bean>
+    <!--    配置spring的声明式事务管理-->
+    <!--    配置事务管理器-->
+    <bean id="traansactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource" ></property>
+    </bean>
+    <!--    开启spring对事务注解的支持-->
+    <tx:annotation-driven transaction-manager="traansactionManager"></tx:annotation-driven>
+
+
+</beans>

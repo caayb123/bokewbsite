@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dream.dao.UserContentDao">
+
+    <resultMap id="categorymappper" type="UserContent">
+        <id column="id" property="id"></id>
+        <result column="num" property="num"></result>
+        <result column="category" property="category"></result>
+    </resultMap>
+    <resultMap id="hotmapper" type="UserContent">
+        <id column="id" property="id"></id>
+        <result column="comment_num" property="commentNum"></result>
+        <result column="content" property="content"></result>
+        <result column="upvote" property="upvote"></result>
+        <result column="title" property="title"></result>
+    </resultMap>
+    <resultMap id="byjoinmaaper" type="UserContent">
+        <id column="id" property="id"></id>
+        <result column="u_id" property="uId"></result>
+        <result property="category" column="category" />
+        <result property="title" column="title" />
+        <result property="personal" column="personal" />
+        <result property="rptTime" column="rpt_time" />
+        <result property="upvote" column="upvote" />
+        <result property="downvote" column="downvote" />
+        <result property="commentNum" column="comment_num" />
+        <result property="content" column="content" />
+<!--        一个文章对应一个作者-->
+        <association property="user" javaType="User">
+            <id column="uuid" property="id"></id>
+            <result column="img_url" property="imgUrl"></result>
+            <result column="nick_name" property="nickName"></result>
+        </association>
+    </resultMap>
+       <select id="findCategoryByUid" resultMap="categorymappper">
+           select category,count(*) as num from user_content where u_id=#{uid} and personal='0' group by category order by num desc
+       </select>
+    <select id="findHotDream" resultMap="hotmapper">
+        select * from user_content where personal='0' order by upvote desc
+    </select>
+    <insert id="insertBackId" keyProperty="id" parameterType="UserContent" useGeneratedKeys="true">
+       insert into user_content values (#{id}, #{uId},#{title}, #{category},#{content},#{personal},#{rptTime},#{upvote},#{downvote},#{commentNum})
+    </insert>
+
+     <select id="findByJoin" resultMap="byjoinmaaper">
+         select uc.id, u_id, title, category, content, personal, rpt_time,upvote, downvote, comment_num,u.id as uuid,u.img_url,u.nick_name from user_content as uc,user as u where uc.u_id=u.id and uc.personal='0'
+     </select>
+
+    <select id="findById" resultMap="byjoinmaaper">
+        select uc.id, u_id, title, category, content, personal, rpt_time,upvote, downvote, comment_num,u.id as uuid,u.img_url,u.nick_name from user_content as uc,user as u where uc.id=#{id} and uc.u_id=u.id
+    </select>
+</mapper>

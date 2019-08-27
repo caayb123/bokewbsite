@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+          http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+          http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security.xsd">
+<!--   设置不拦截的资源url，无法获得用户信息-->
+    <security:http security="none" pattern="/css/**" />
+    <security:http security="none" pattern="/js/**" />
+    <security:http security="none" pattern="/images/**" />
+    <security:http security="none" pattern="/favicon.ico"/>
+    <security:http security="none" pattern="/login*" />
+    <security:http security="none" pattern="/captchaServlet"/>
+    <security:http security="none" pattern="/sendEmail*"/>
+    <security:http security="none" pattern="/register*" />
+    <security:http security="none" pattern="/accessDenied"/>
+    <security:http security="none" pattern="/check/**"/>
+	 <security:http security="none" pattern="/page/reply"/>
+    <security:http auto-config="false" access-decision-manager-ref="accessDecisionManager"
+                    use-expressions="true" entry-point-ref="loginEntryPoint">
+<!--      禁用frame-option不禁用会阻止加载任何frame页面，包括图片上传超时-->
+        <security:headers>
+            <security:frame-options disabled="true"></security:frame-options>
+        </security:headers>
+
+<!--        配置登录页信息，分别为登录 URL、认证失败跳转 URL、认证成功跳转 URL、登录 URL、password 和 username 请求参数名称-->
+<!--        <security:form-login login-page="/login.jsp" authentication-failure-url="/login.jsp?error=1"-->
+<!--                             login-processing-url="/login/doLogin" password-parameter="password"-->
+<!--                             default-target-url="/login/doLogin"-->
+<!--                             username-parameter="email" />-->
+
+<!--配置自定义跳转的403页面，暂时不需要了-->
+<!--        <security:access-denied-handler ref="accessDeniedHandler" />-->
+
+<!--        配置不拦截的url，该部分的url可以从框架上下文中获得用户信息-->
+        <security:csrf disabled="true"/>
+        <security:intercept-url pattern="/" access="permitAll"/>
+        <security:intercept-url pattern="/index**" access="permitAll"/>
+        <security:intercept-url pattern="/login/phone" access="permitAll"/>
+        <security:intercept-url pattern="/page/pages" access="permitAll"/>
+        <security:intercept-url pattern="/login/sendSms" access="permitAll"/>
+        <security:intercept-url pattern="/other/**" access="permitAll"/>
+        <security:intercept-url pattern="/admin/**" access="hasRole('ROLE_ADMIN')"/>
+        <security:intercept-url pattern="/**" access="hasRole('ROLE_USER')"/>
+
+
+
+        <!-- session失效url session策略-->
+        <security:session-management invalid-session-url="/index.jsp"  session-authentication-strategy-ref="sessionStrategy">
+        </security:session-management>
+
+        <!-- spring-security提供的过滤器 以及我们自定义的过滤器 authenticationFilter-->
+        <security:custom-filter ref="logoutFilter" position="LOGOUT_FILTER" />
+        <security:custom-filter before="FORM_LOGIN_FILTER" ref="authenticationFilter"/>
+        <security:custom-filter after="FORM_LOGIN_FILTER" ref="phoneAuthenticationFilter"/>
+        <security:custom-filter ref="concurrencyFilter" position="CONCURRENT_SESSION_FILTER"/>
+    </security:http>
+<!--    <bean id="accessDeniedHandler"-->
+<!--                class="com.dream.sercurity.Account.MyAccessDeniedHandler">-->
+<!--        <property name="errorPage" value="/accessDenied.jsp" />-->
+<!--    </bean>-->
+
+    <bean id="loginEntryPoint"
+          class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+        <!-- 用户未登录访问保护资源后弹到默认登录页的url -->
+        <constructor-arg value="/login.jsp?error=login"/>
+    </bean>
+    <!-- 启用表达式 为了后面的投票器做准备 -->
+    <bean class="org.springframework.security.web.access.expression.DefaultWebSecurityExpressionHandler"
+          id="expressionHandler"/>
+    <bean class="org.springframework.security.web.access.expression.WebExpressionVoter"
+          id="expressionVoter">
+        <property name="expressionHandler" ref="expressionHandler"/>
+    </bean>
+
+    <!-- 认证管理器，使用自定义的accountService，并对密码采用md5加密 -->
+    <security:authentication-manager alias="authenticationManager">
+        <security:authentication-provider user-service-ref="accountService">
+            <security:password-encoder hash="md5">
+                <security:salt-source user-property="email"></security:salt-source>
+            </security:password-encoder>
+        </security:authentication-provider>
+        <security:authentication-provider ref="phoneAuthenticationProvider"></security:authentication-provider>
+    </security:authentication-manager>
+<!--    手机登录逻辑认证处理器-->
+    <bean id="phoneAuthenticationFilter" class="com.dream.sercurity.phone.PhoneAuthenticationFilter">
+        <property name="filterProcessesUrl" value="/login/phoneLogin"></property>
+        <property name="authenticationManager" ref="authenticationManager"></property>
+        <property name="sessionAuthenticationStrategy" ref="sessionStrategy"></property>
+        <property name="authenticationSuccessHandler">
+<!--        <bean class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler">-->
+<!--            <property name="defaultTargetUrl" value="/personal/list"></property>-->
+<!--        </bean>-->
+            <bean class="com.dream.sercurity.phone.PhoneSuccessHandle"></bean>
+        </property>
+        <!--自定义手机登录失败处理器-->
+        <property name="authenticationFailureHandler">
+            <bean class="com.dream.sercurity.phone.PhoneAuthenticationFailureHandler">
+                <property name="defaultFailureUrl" value="/login.jsp?error=fail"></property>
+            </bean>
+        </property>
+    </bean>
+
+
+<!--    普通登录逻辑认证处理器-->
+    <bean id="authenticationFilter" class="com.dream.sercurity.Account.AccountAuthenticationFilter">
+        <property name="filterProcessesUrl" value="/login/doLogin"></property>
+        <property name="authenticationManager" ref="authenticationManager"></property>
+        <property name="sessionAuthenticationStrategy" ref="sessionStrategy"></property>
+        <property name="authenticationSuccessHandler">
+<!--            <bean class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler">-->
+<!--                <property name="defaultTargetUrl" value="/personal/list"></property>-->
+<!--            </bean>-->
+            <bean class="com.dream.sercurity.Account.AccountLoginSuccessHandle"></bean>
+        </property>
+<!--        自定义普通登录认证失败处理器-->
+        <property name="authenticationFailureHandler">
+            <bean class="com.dream.sercurity.Account.AccountAuthenticationFailureHandler">
+                <property name="defaultFailureUrl" value="/login.jsp?error=fail"></property>
+            </bean>
+        </property>
+    </bean>
+
+
+    <bean id="logoutFilter" class="org.springframework.security.web.authentication.logout.LogoutFilter">
+        <!-- 处理退出的虚拟url -->
+        <property name="filterProcessesUrl" value="/login/out" />
+        <!-- 退出处理成功后的默认显示url -->
+        <constructor-arg index="0" value="/login.jsp?logout" />
+        <constructor-arg index="1">
+            <!-- 退出成功后的handler列表 -->
+            <array>
+                <bean id="securityContextLogoutHandler"
+                      class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler" />
+            </array>
+        </constructor-arg>
+    </bean>
+
+    <!-- ConcurrentSessionFilter过滤器配置(主要设置账户session过期路径) -->
+    <bean id="concurrencyFilter" class="org.springframework.security.web.session.ConcurrentSessionFilter">
+        <constructor-arg ref="sessionRegistry"></constructor-arg>
+        <constructor-arg value="/login.jsp?error=expired"></constructor-arg>
+    </bean>
+
+
+    <bean id="sessionStrategy" class="org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy">
+        <constructor-arg>
+            <list>
+
+                <bean class="org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy">
+                    <property name="maximumSessions" value="1"></property>
+                    <property name="exceptionIfMaximumExceeded" value="false"></property>
+                    <constructor-arg ref="sessionRegistry"/>
+                </bean>
+                <bean class="org.springframework.security.web.authentication.session.SessionFixationProtectionStrategy"/>
+                <bean class="org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy">
+                    <constructor-arg ref="sessionRegistry"/>
+                </bean>
+            </list>
+
+        </constructor-arg>
+    </bean>
+    <bean id="sessionRegistry" scope="singleton" class="org.springframework.security.core.session.SessionRegistryImpl"></bean>
+    <bean id="accountService" class="com.dream.sercurity.Account.AccountDetailsService"/>
+    <bean id="phoneService" class="com.dream.sercurity.phone.PhoneUserDetailsService"/>
+    <bean id="phoneAuthenticationProvider" class="com.dream.sercurity.phone.PhoneAuthenticationProvider">
+        <property name="userDetailsService" ref="phoneService"></property>
+    </bean>
+    <!-- An access decision voter that reads ROLE_* configuration settings -->
+    <bean id="roleVoter" class="org.springframework.security.access.vote.RoleVoter"/>
+    <bean id="authenticatedVoter"
+          class="org.springframework.security.access.vote.AuthenticatedVoter"/>
+
+    <bean id="accessDecisionManager"
+          class="org.springframework.security.access.vote.AffirmativeBased">
+        <constructor-arg>
+            <list>
+                <ref bean="roleVoter"/>
+                <ref bean="authenticatedVoter"/>
+                <ref bean="expressionVoter"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+</beans>
